@@ -312,8 +312,9 @@ RELEASE_PROPS = os.path.expanduser(os.environ.get("WFF_RELEASE_PROPS", "~/.andro
 
 
 def signing_args():
-    """Release key when RELEASE=1 (key + password live outside the repo), else the debug key."""
-    if os.environ.get("RELEASE"):
+    """Release key whenever its properties file exists (key + password live outside the repo),
+    so installed faces can always be updated in place. DEBUG=1 forces the debug key."""
+    if not os.environ.get("DEBUG") and (os.environ.get("RELEASE") or os.path.exists(RELEASE_PROPS)):
         if not os.path.exists(RELEASE_PROPS):
             raise SystemExit(f"RELEASE=1 but {RELEASE_PROPS} not found")
         p = dict(l.strip().split("=", 1) for l in open(RELEASE_PROPS) if "=" in l)
