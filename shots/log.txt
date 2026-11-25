@@ -1,0 +1,9 @@
+shot orbit
+shot axis
+shot haze
+shot tuner
+shot bauhaus
+shot stack
+shot mood
+shot scribble
+ALLDONE

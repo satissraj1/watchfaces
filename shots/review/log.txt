@@ -1,0 +1,32 @@
+reviewed orbit (5 variants)
+reviewed tuner (5 variants)
+reviewed bauhaus (5 variants)
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/ImageFile.py", line 392, in load
+    s = read(read_bytes)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/PngImagePlugin.py", line 999, in load_read
+    cid, pos, length = self.png.read()
+                       ~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/PngImagePlugin.py", line 179, in read
+    length = i32(s)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/_binary.py", line 96, in i32be
+    return unpack_from(">I", c, o)[0]
+           ~~~~~~~~~~~^^^^^^^^^^^^
+struct.error: unpack_from requires a buffer of at least 4 bytes for unpacking 4 bytes at offset 0 (actual buffer size is 0)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/satissraj/WatchFaces/sheet.py", line 8, in <module>
+    im.paste(Image.open(f"shots/{n}.png").convert("RGB"), ((i % cols) * 450, (i // cols) * 450))
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/Image.py", line 1070, in convert
+    self.load()
+    ~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/PIL/ImageFile.py", line 399, in load
+    raise OSError(msg) from e
+OSError: image file is truncated
+reviewed stack (5 variants)
+reviewed mood (6 variants)
+reviewed scribble (5 variants)
+ALLDONE
