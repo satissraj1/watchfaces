@@ -1,0 +1,10 @@
+# build intermediates
+build/
+__pycache__/
+*.pyc
+*.idsig
+# signing material never goes in the repo
+*.jks
+*.keystore
+*.properties
+.DS_Store

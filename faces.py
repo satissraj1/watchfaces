@@ -374,6 +374,9 @@ def scribble_img(loops, seed):
 
 def _pen(d, pts, w):
     d.line([(x * SS, y * SS) for x, y in pts], fill=(255, 255, 255, 255), width=max(1, int(w * SS)), joint="curve")
+    r = max(1, int(w * SS)) / 2
+    for x, y in (pts[0], pts[-1]):
+        d.ellipse([x * SS - r, y * SS - r, x * SS + r, y * SS + r], fill=(255, 255, 255, 255))
 
 
 def scribble_hand(length, tail, spread, strokes, pen, seed):
@@ -483,14 +486,40 @@ def wander_path(seed, start=(225, 46), n_way=4, r_lo=70, r_max=172, samples=480)
     return [(x + 1.2 * math.sin(k * 0.21 + seed) , y + 1.2 * math.cos(k * 0.17 + seed * 2)) for k, (x, y) in enumerate(out)]
 
 
-def wander_seconds(seed, color, pen=3.2, segs=240):
-    """`segs` short vector pieces of equal arc length; piece i fades in over its own 60/segs-second slot,
-    so the line grows continuously like a pen being drawn."""
+def _rdp(points, epsilon):
+    if len(points) < 3:
+        return points
+    first, last = points[0], points[-1]
+    dx, dy = last[0] - first[0], last[1] - first[1]
+    norm = math.hypot(dx, dy)
+    dmax, index = 0.0, 0
+    for i in range(1, len(points) - 1):
+        p = points[i]
+        d = math.hypot(p[0] - first[0], p[1] - first[1]) if norm == 0 else abs(dy * p[0] - dx * p[1] + last[0] * first[1] - last[1] * first[0]) / norm
+        if d > dmax:
+            dmax, index = d, i
+    if dmax > epsilon:
+        rec1 = _rdp(points[:index+1], epsilon)
+        rec2 = _rdp(points[index:], epsilon)
+        return rec1[:-1] + rec2
+    else:
+        return [first, last]
+
+
+def wander_seconds(seed, color, pen=3.2, segs=120, fade_duration=0.6, period=60):
+    """`segs` short vector pieces of equal arc length with tight bounding boxes;
+    piece i fades in over its own slot so the line grows continuously like a pen being drawn,
+    and the completed loop gracefully transitions into the new minute."""
     pts = wander_path(seed)
     L = [0.0]
     for a, b in zip(pts, pts[1:]):
         L.append(L[-1] + math.dist(a, b))
-    total, out, j = L[-1], [], 0
+    total, out = L[-1], []
+    draw_time = period - fade_duration
+    T = "[SECOND_MILLISECOND]" if period == 60 else f"([SECOND_MILLISECOND] - {period} * floor([SECOND_MILLISECOND] / {period}))"
+    slot = draw_time / segs
+    pad = math.ceil(pen + 2)
+    j = 0
     for i in range(segs):
         lo, hi = total * i / segs, total * (i + 1) / segs
         seg = []
@@ -500,11 +529,34 @@ def wander_seconds(seed, color, pen=3.2, segs=240):
             j += 1
         seg.append(pts[min(j, len(pts) - 1)])
         j = max(0, j - 1)
-        lines = [line(a[0], a[1], b[0], b[1], color, pen) for a, b in zip(seg, seg[1:])]
-        slot = 60.0 / segs
-        tr = f'<Transform target="alpha" value="clamp(([SECOND_MILLISECOND] - {i * slot:.3f}) * {255 / slot:.1f}, 0, 255)"/>'
-        out.append(f'<PartDraw x="0" y="0" width="450" height="450" alpha="0">{tr}{"".join(lines)}</PartDraw>')
-    return "".join(out)
+        simplified = _rdp(seg, 0.3)
+        xs = [p[0] for p in simplified]
+        ys = [p[1] for p in simplified]
+        bx0 = int(math.floor(min(xs) - pad))
+        by0 = int(math.floor(min(ys) - pad))
+        bx1 = int(math.ceil(max(xs) + pad))
+        by1 = int(math.ceil(max(ys) + pad))
+        bw = max(1, bx1 - bx0)
+        bh = max(1, by1 - by0)
+        t_start = i * slot
+        # pen growth: each stroke extends from its start point; ROUND cap = ink nib at the tip
+        pairs = list(zip(simplified, simplified[1:]))
+        seglen = [math.dist(a, b) for a, b in pairs]
+        tot = sum(seglen) or 1.0
+        lines, acc = [], 0.0
+        for (a, b), sl in zip(pairs, seglen):
+            ts, dur = t_start + slot * acc / tot, max(0.001, slot * sl / tot)
+            acc += sl
+            prog = f"clamp(({T} - {ts:.3f}) / {dur:.3f}, 0, 1)"
+            x1, y1, x2, y2 = a[0] - bx0, a[1] - by0, b[0] - bx0, b[1] - by0
+            lines.append(f'<Line startX="{x1:.2f}" startY="{y1:.2f}" endX="{x1:.2f}" endY="{y1:.2f}">'
+                         f'<Transform target="endX" value="{x1:.2f} + {x2 - x1:.2f} * {prog}"/>'
+                         f'<Transform target="endY" value="{y1:.2f} + {y2 - y1:.2f} * {prog}"/>'
+                         f'<Stroke color="{color}" thickness="{pen}" cap="ROUND"/></Line>')
+        tr = f'<Transform target="alpha" value="clamp(({T} - {t_start:.3f}) * 100000, 0, 255)"/>'
+        out.append(f'<PartDraw x="{bx0}" y="{by0}" width="{bw}" height="{bh}" alpha="0">{tr}{"".join(lines)}</PartDraw>')
+    fade_tr = f'<Transform target="alpha" value="clamp(({period} - {T}) * {255 / fade_duration:.1f}, 0, 255)"/>'
+    return f'<Group name="sec_loop" x="0" y="0" width="450" height="450">{fade_tr}{"".join(out)}</Group>'
 
 
 def by_minute(options):
@@ -545,8 +597,8 @@ def scribble():
     h_ = scribble_hand(88, 12, 5.2, 3, 3.0, 21)
     m_ = scribble_hand(134, 14, 4.4, 3, 2.6, 22)
     ha, hb = hands_pair(F, "sc", [("HourHand", h_), ("MinuteHand", m_)], hc, "#FFE0E0E0")
-    # seconds: a pen draws one calm loop from 12 back to 12 each minute
-    sec_xml = wander_seconds(303, C("skc"), segs=300)  # one calm path, redrawn every minute
+    # seconds: a pen draws one calm loop from 12 back to 12 each minute with smooth transition
+    sec_xml = wander_seconds(303, C("skc"), segs=120, period=30)
     # hanging time tag: knot -> short thread -> scribbled tag with handwritten time
     TT, TW_, TH_ = 288, 220, 76
     def cond(expr, yes, no):

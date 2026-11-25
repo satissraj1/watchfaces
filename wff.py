@@ -304,13 +304,27 @@ class Face:
         run([os.path.join(BT, "zipalign"), "-f", "4", os.path.join(d, "u.apk"), os.path.join(d, "a.apk")])
         os.makedirs(out_dir, exist_ok=True)
         apk = os.path.join(out_dir, f"{self.key}{'_review' if os.environ.get('REVIEW') else ''}.apk")
-        run([os.path.join(BT, "apksigner"), "sign", "--ks", os.path.expanduser("~/.android/debug.keystore"),
-             "--ks-pass", "pass:android", "--key-pass", "pass:android", "--ks-key-alias", "androiddebugkey",
-             "--out", apk, os.path.join(d, "a.apk")])
+        run([os.path.join(BT, "apksigner"), "sign", *signing_args(), "--out", apk, os.path.join(d, "a.apk")])
         return pkg, apk
+
+
+RELEASE_PROPS = os.path.expanduser(os.environ.get("WFF_RELEASE_PROPS", "~/.android/watchfaces-release.properties"))
+
+
+def signing_args():
+    """Release key when RELEASE=1 (key + password live outside the repo), else the debug key."""
+    if os.environ.get("RELEASE"):
+        if not os.path.exists(RELEASE_PROPS):
+            raise SystemExit(f"RELEASE=1 but {RELEASE_PROPS} not found")
+        p = dict(l.strip().split("=", 1) for l in open(RELEASE_PROPS) if "=" in l)
+        pw = f"pass:{p['password']}"
+        return ["--ks", os.path.expanduser(p["storeFile"]), "--ks-key-alias", p["alias"], "--ks-pass", pw, "--key-pass", pw]
+    return ["--ks", os.path.expanduser("~/.android/debug.keystore"), "--ks-key-alias", "androiddebugkey",
+            "--ks-pass", "pass:android", "--key-pass", "pass:android"]
 
 
 def run(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        raise SystemExit(f"FAILED: {' '.join(cmd)}\n{r.stdout}\n{r.stderr}")
+        shown = ["pass:***" if str(c).startswith("pass:") else str(c) for c in cmd]
+        raise SystemExit(f"FAILED: {' '.join(shown)}\n{r.stdout}\n{r.stderr}")
